@@ -12,7 +12,7 @@ import (
 // ======================
 // REGISTER
 // ======================
-func Register(name, email, password string) error {
+func Register(name, email, password, role string) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	if err != nil {
 		return err
@@ -22,6 +22,7 @@ func Register(name, email, password string) error {
 		Name:     name,
 		Email:    email,
 		Password: string(hashedPassword),
+		Role:     role, // 🔥 TAMBAH INI
 	}
 
 	if err := config.DB.Create(&user).Error; err != nil {
@@ -49,6 +50,9 @@ func Login(email, password string) (*model.User, error) {
 	return &user, nil
 }
 
+// ======================
+// GET USER
+// ======================
 func GetUserByID(id uint) (model.User, error) {
 	var user model.User
 	err := config.DB.First(&user, id).Error

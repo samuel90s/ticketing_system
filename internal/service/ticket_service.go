@@ -8,6 +8,49 @@ import (
 	"ticketing-system/internal/model"
 )
 
+//
+// ======================
+// DTO RESPONSE
+// ======================
+//
+
+type TicketResponse struct {
+	ID          uint   `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	User        string `json:"user"`
+	Assignee    string `json:"assignee"`
+	Status      string `json:"status"`
+}
+
+//
+// ======================
+// HELPER MAPPING
+// ======================
+//
+
+func mapToResponse(tickets []model.Ticket) []TicketResponse {
+	var result []TicketResponse
+
+	for _, t := range tickets {
+		assigneeName := ""
+		if t.Assignee != nil {
+			assigneeName = t.Assignee.Name
+		}
+
+		result = append(result, TicketResponse{
+			ID:          t.ID,
+			Title:       t.Title,
+			Description: t.Description,
+			User:        t.User.Name,
+			Assignee:    assigneeName,
+			Status:      t.Status,
+		})
+	}
+
+	return result
+}
+
 // ======================
 // CREATE TICKET
 // ======================
@@ -27,12 +70,11 @@ func CreateTicket(title, description string, userID uint) error {
 }
 
 // ======================
-// GET USER TICKETS (Pagination + Search)
+// GET USER TICKETS (JOIN + DTO)
 // ======================
-func GetTicketsByUser(userID uint, page, limit int, search string) ([]model.Ticket, error) {
+func GetTicketsByUser(userID uint, page, limit int, search string) ([]TicketResponse, error) {
 	var tickets []model.Ticket
 
-	// safety pagination
 	if page < 1 {
 		page = 1
 	}
@@ -40,7 +82,10 @@ func GetTicketsByUser(userID uint, page, limit int, search string) ([]model.Tick
 		limit = 10
 	}
 
-	query := config.DB.Where("user_id = ?", userID)
+	query := config.DB.
+		Preload("User").
+		Preload("Assignee").
+		Where("user_id = ?", userID)
 
 	if search != "" {
 		search = strings.ToLower(search)
@@ -52,13 +97,13 @@ func GetTicketsByUser(userID uint, page, limit int, search string) ([]model.Tick
 		Limit(limit).
 		Find(&tickets).Error
 
-	return tickets, err
+	return mapToResponse(tickets), err
 }
 
 // ======================
-// GET ALL TICKETS (ADMIN)
+// GET ALL TICKETS (ADMIN JOIN + DTO)
 // ======================
-func GetAllTickets(page, limit int, search string) ([]model.Ticket, error) {
+func GetAllTickets(page, limit int, search string) ([]TicketResponse, error) {
 	var tickets []model.Ticket
 
 	if page < 1 {
@@ -68,7 +113,10 @@ func GetAllTickets(page, limit int, search string) ([]model.Ticket, error) {
 		limit = 10
 	}
 
-	query := config.DB.Model(&model.Ticket{})
+	query := config.DB.
+		Preload("User").
+		Preload("Assignee").
+		Model(&model.Ticket{})
 
 	if search != "" {
 		search = strings.ToLower(search)
@@ -80,7 +128,7 @@ func GetAllTickets(page, limit int, search string) ([]model.Ticket, error) {
 		Limit(limit).
 		Find(&tickets).Error
 
-	return tickets, err
+	return mapToResponse(tickets), err
 }
 
 // ======================
@@ -93,14 +141,12 @@ func UpdateTicketStatus(ticketID uint, userID uint, role string, status string) 
 		return errors.New("ticket not found")
 	}
 
-	// authorization check
 	if ticket.UserID != userID &&
 		(ticket.AssigneeID == nil || *ticket.AssigneeID != userID) &&
 		role != "admin" {
 		return errors.New("not authorized to update ticket")
 	}
 
-	// validasi status
 	status = strings.ToLower(status)
 	if status != "open" && status != "closed" {
 		return errors.New("invalid status")
@@ -117,12 +163,10 @@ func UpdateTicketStatus(ticketID uint, userID uint, role string, status string) 
 func AssignTicket(ticketID uint, assigneeID uint) error {
 	var ticket model.Ticket
 
-	// cek ticket
 	if err := config.DB.First(&ticket, ticketID).Error; err != nil {
 		return errors.New("ticket not found")
 	}
 
-	// cek user tujuan ada
 	var user model.User
 	if err := config.DB.First(&user, assigneeID).Error; err != nil {
 		return errors.New("assignee user not found")
