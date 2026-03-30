@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strings"
 
 	"ticketing-system/internal/service"
 	"ticketing-system/internal/utils"
@@ -10,40 +9,35 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-//
 // ======================
-// REQUEST STRUCT
+// REQUEST STRUCTS
 // ======================
-//
 
 type RegisterRequest struct {
-	Name     string `json:"name" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
-	Role     string `json:"role"` // optional
+	Name     string `json:"name"     binding:"required,min=2,max=100"`
+	Email    string `json:"email"    binding:"required,email"`
+	Password string `json:"password" binding:"required,min=6,max=72"`
 }
 
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
+	Email    string `json:"email"    binding:"required,email"`
 	Password string `json:"password" binding:"required"`
 }
 
-//
 // ======================
 // RESPONSE DTO
 // ======================
-//
 
 type AuthResponse struct {
 	Token string      `json:"token"`
 	User  interface{} `json:"user"`
 }
 
-//
 // ======================
 // REGISTER
 // ======================
-//
+// Role selalu "user" — admin hanya bisa dibuat manual lewat DB atau endpoint khusus admin.
+// Ini mencegah privilege escalation.
 
 func Register(c *gin.Context) {
 	var req RegisterRequest
@@ -53,36 +47,17 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	// normalize role
-	req.Role = strings.ToLower(req.Role)
-
-	// default role
-	if req.Role == "" {
-		req.Role = "user"
-	}
-
-	// 🔥 VALIDASI ROLE (IMPORTANT)
-	if req.Role != "user" && req.Role != "admin" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role"})
-		return
-	}
-
-	err := service.Register(req.Name, req.Email, req.Password, req.Role)
-	if err != nil {
+	if err := service.Register(req.Name, req.Email, req.Password); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "user registered",
-	})
+	c.JSON(http.StatusCreated, gin.H{"message": "user registered successfully"})
 }
 
-//
 // ======================
 // LOGIN
 // ======================
-//
 
 func Login(c *gin.Context) {
 	var req LoginRequest
@@ -94,7 +69,8 @@ func Login(c *gin.Context) {
 
 	user, err := service.Login(req.Email, req.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		// Pesan generik — jangan kasih tau "user not found" vs "wrong password"
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 		return
 	}
 
@@ -104,7 +80,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	response := AuthResponse{
+	c.JSON(http.StatusOK, AuthResponse{
 		Token: token,
 		User: gin.H{
 			"id":    user.ID,
@@ -112,7 +88,5 @@ func Login(c *gin.Context) {
 			"email": user.Email,
 			"role":  user.Role,
 		},
-	}
-
-	c.JSON(http.StatusOK, response)
+	})
 }

@@ -9,15 +9,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-//
 // ======================
 // REQUEST STRUCTS
 // ======================
-//
 
 type CreateTicketRequest struct {
-	Title       string `json:"title" binding:"required"`
-	Description string `json:"description" binding:"required"`
+	Title       string `json:"title"       binding:"required,min=3,max=200"`
+	Description string `json:"description" binding:"required,min=10"`
 }
 
 type AssignTicketRequest struct {
@@ -25,55 +23,86 @@ type AssignTicketRequest struct {
 }
 
 type UpdateStatusRequest struct {
-	Status string `json:"status" binding:"required"` // open / closed
+	Status string `json:"status" binding:"required"`
+}
+
+// ======================
+// HELPER: safe get user_id from context
+// ======================
+
+func getUserID(c *gin.Context) (uint, bool) {
+	raw, exists := c.Get("user_id")
+	if !exists {
+		return 0, false
+	}
+	id, ok := raw.(uint)
+	return id, ok
+}
+
+func getRole(c *gin.Context) (string, bool) {
+	raw, exists := c.Get("role")
+	if !exists {
+		return "", false
+	}
+	role, ok := raw.(string)
+	return role, ok
 }
 
 // ======================
 // CREATE TICKET
 // ======================
+
 func CreateTicket(c *gin.Context) {
 	var req CreateTicketRequest
-
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	userID, _ := c.Get("user_id")
+	userID, ok := getUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
-	err := service.CreateTicket(req.Title, req.Description, userID.(uint))
-	if err != nil {
+	if err := service.CreateTicket(req.Title, req.Description, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ticket created"})
+	c.JSON(http.StatusCreated, gin.H{"message": "ticket created successfully"})
 }
 
 // ======================
 // GET USER TICKETS
 // ======================
+
 func GetTickets(c *gin.Context) {
-	userID, _ := c.Get("user_id")
+	userID, ok := getUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	search := c.DefaultQuery("search", "")
 
-	tickets, err := service.GetTicketsByUser(userID.(uint), page, limit, search)
+	result, err := service.GetTicketsByUser(userID, page, limit, search)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get tickets"})
 		return
 	}
 
-	c.JSON(http.StatusOK, tickets)
+	c.JSON(http.StatusOK, result)
 }
 
 // ======================
 // ASSIGN TICKET (ADMIN)
 // ======================
+
 func AssignTicket(c *gin.Context) {
-	ticketID, err := strconv.Atoi(c.Param("id"))
+	ticketID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticket id"})
 		return
@@ -85,23 +114,32 @@ func AssignTicket(c *gin.Context) {
 		return
 	}
 
-	err = service.AssignTicket(uint(ticketID), req.AssigneeID)
-	if err != nil {
+	if err := service.AssignTicket(uint(ticketID), req.AssigneeID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ticket assigned"})
+	c.JSON(http.StatusOK, gin.H{"message": "ticket assigned successfully"})
 }
 
 // ======================
 // UPDATE STATUS
 // ======================
-func UpdateTicketStatus(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	role, _ := c.Get("role")
 
-	ticketID, err := strconv.Atoi(c.Param("id"))
+func UpdateTicketStatus(c *gin.Context) {
+	userID, ok := getUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	role, ok := getRole(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	ticketID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticket id"})
 		return
@@ -113,16 +151,10 @@ func UpdateTicketStatus(c *gin.Context) {
 		return
 	}
 
-	err = service.UpdateTicketStatus(
-		uint(ticketID),
-		userID.(uint),
-		role.(string),
-		req.Status,
-	)
-	if err != nil {
+	if err := service.UpdateTicketStatus(uint(ticketID), userID, role, req.Status); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "status updated"})
+	c.JSON(http.StatusOK, gin.H{"message": "status updated successfully"})
 }
