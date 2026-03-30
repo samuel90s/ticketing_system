@@ -158,3 +158,29 @@ func UpdateTicketStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "status updated successfully"})
 }
+
+// ======================
+// GET TICKET BY ID (USER)
+// ======================
+
+func GetTicketByIDUser(c *gin.Context) {
+	ticketID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticket id"})
+		return
+	}
+
+	userID, ok := getUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	ticket, err := service.GetUserTicketByID(uint(ticketID), userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, ticket)
+}

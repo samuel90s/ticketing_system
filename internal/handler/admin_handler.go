@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"ticketing-system/internal/config"
+	"ticketing-system/internal/model"
 	"ticketing-system/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -23,7 +25,7 @@ func GetAllTickets(c *gin.Context) {
 	c.JSON(http.StatusOK, tickets)
 }
 
-func GetTicketByID(c *gin.Context) {
+func GetAdminTicketByID(c *gin.Context) {
 	ticketID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticket id"})
@@ -73,11 +75,29 @@ func DeleteTicket(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "ticket deleted successfully"})
 }
 
+// UserDTO untuk response yang aman
+type UserDTO struct {
+	ID    uint   `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
 func GetAllUsers(c *gin.Context) {
-	users, err := service.GetAllUsers()
-	if err != nil {
+	var users []model.User
+	if err := config.DB.Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get users"})
 		return
 	}
-	c.JSON(http.StatusOK, users)
+
+	result := make([]UserDTO, 0, len(users))
+	for _, u := range users {
+		result = append(result, UserDTO{
+			ID:    u.ID,
+			Name:  u.Name,
+			Email: u.Email,
+			Role:  u.Role,
+		})
+	}
+	c.JSON(http.StatusOK, result)
 }

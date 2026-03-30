@@ -53,7 +53,10 @@ func main() {
 		// Tickets
 		auth.POST("/tickets", handler.CreateTicket)
 		auth.GET("/tickets", handler.GetTickets)
+		// auth.GET("/tickets/:id", handler.GetTicketByID)
+		// auth.PUT("/tickets/:id", handler.UpdateTicket)
 		auth.PATCH("/tickets/:id/status", handler.UpdateTicketStatus)
+		// auth.GET("/tickets/:id/history", handler.GetTicketHistory)
 
 		// Comments
 		auth.GET("/tickets/:id/comments", handler.GetComments)
@@ -71,7 +74,7 @@ func main() {
 		admin.Use(middleware.AdminMiddleware())
 		{
 			admin.GET("/tickets", handler.GetAllTickets)
-			admin.GET("/tickets/:id", handler.GetTicketByID)
+			admin.GET("/tickets/:id", handler.GetAdminTicketByID)
 			admin.PUT("/tickets/:id", handler.EditTicket)
 			admin.DELETE("/tickets/:id", handler.DeleteTicket)
 			admin.PATCH("/tickets/:id/assign", handler.AssignTicket)

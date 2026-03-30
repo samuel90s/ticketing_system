@@ -291,3 +291,67 @@ func GetAllUsers() ([]model.User, error) {
 	err := config.DB.Select("id, name, email, role").Find(&users).Error
 	return users, err
 }
+
+// ======================
+// GET TICKET BY ID (USER - hanya ticket milik sendiri)
+// ======================
+
+func GetUserTicketByID(ticketID, userID uint) (TicketResponse, error) {
+	var ticket model.Ticket
+
+	err := config.DB.
+		Preload("User").
+		Preload("Assignee").
+		Where("id = ? AND user_id = ?", ticketID, userID).
+		First(&ticket).Error
+
+	if err != nil {
+		return TicketResponse{}, errors.New("ticket not found")
+	}
+
+	assigneeName := ""
+	if ticket.Assignee != nil {
+		assigneeName = ticket.Assignee.Name
+	}
+
+	return TicketResponse{
+		ID:          ticket.ID,
+		Title:       ticket.Title,
+		Description: ticket.Description,
+		User:        ticket.User.Name,
+		Assignee:    assigneeName,
+		Status:      ticket.Status,
+	}, nil
+}
+
+// ======================
+// GET TICKET BY ID FOR USER (cek ownership)
+// ======================
+
+func GetTicketByIDForUser(ticketID, userID uint) (TicketResponse, error) {
+	var ticket model.Ticket
+
+	err := config.DB.
+		Preload("User").
+		Preload("Assignee").
+		Where("id = ? AND user_id = ?", ticketID, userID).
+		First(&ticket).Error
+
+	if err != nil {
+		return TicketResponse{}, errors.New("ticket not found")
+	}
+
+	assigneeName := ""
+	if ticket.Assignee != nil {
+		assigneeName = ticket.Assignee.Name
+	}
+
+	return TicketResponse{
+		ID:          ticket.ID,
+		Title:       ticket.Title,
+		Description: ticket.Description,
+		User:        ticket.User.Name,
+		Assignee:    assigneeName,
+		Status:      ticket.Status,
+	}, nil
+}
