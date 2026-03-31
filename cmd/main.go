@@ -22,6 +22,7 @@ func main() {
 		&model.Ticket{},
 		&model.Comment{},
 		&model.Attachment{},
+		&model.TicketHistory{},
 	); err != nil {
 		log.Fatal("failed to migrate database:", err)
 	}
@@ -41,6 +42,8 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	r.Static("/uploads", "./uploads")
+
 	r.GET("/", func(c *gin.Context) { c.JSON(200, gin.H{"message": "API is running"}) })
 	r.POST("/register", handler.Register)
 	r.POST("/login", handler.Login)
@@ -50,37 +53,47 @@ func main() {
 	{
 		auth.GET("/profile", handler.Profile)
 
-		// Tickets
+		// USER TICKET ROUTES (semua role)
 		auth.POST("/tickets", handler.CreateTicket)
 		auth.GET("/tickets", handler.GetTickets)
-		// auth.GET("/tickets/:id", handler.GetTicketByID)
-		// auth.PUT("/tickets/:id", handler.UpdateTicket)
-		auth.PATCH("/tickets/:id/status", handler.UpdateTicketStatus)
-		// auth.GET("/tickets/:id/history", handler.GetTicketHistory)
+		auth.GET("/tickets/:id", handler.GetTicketByID)
+		auth.GET("/tickets/:id/history", handler.GetTicketHistory)
 
-		// Comments
+		// Comments (semua role, filtering by role ada di service)
 		auth.GET("/tickets/:id/comments", handler.GetComments)
 		auth.POST("/tickets/:id/comments", handler.AddComment)
 		auth.DELETE("/tickets/:id/comments/:comment_id", handler.DeleteComment)
 
-		// Attachments
+		// Attachments (semua role)
 		auth.POST("/tickets/:id/attachments", handler.UploadAttachment)
 		auth.GET("/tickets/:id/attachments", handler.GetAttachments)
 		auth.GET("/attachments/:id/download", handler.DownloadAttachment)
 		auth.DELETE("/attachments/:id", handler.DeleteAttachment)
 
-		// Admin routes
+		// AGENT ROUTES (agent + admin)
+		agent := auth.Group("/agent")
+		agent.Use(middleware.AgentMiddleware())
+		{
+			agent.GET("/tickets", handler.GetAllTickets)
+			agent.GET("/tickets/:id", handler.GetAdminTicketByID)
+			agent.GET("/tickets/:id/history", handler.GetAdminTicketHistory)
+			agent.PATCH("/tickets/:id/status", handler.UpdateTicketStatus)
+		}
+
+		// ADMIN ROUTES (admin only)
 		admin := auth.Group("/admin")
 		admin.Use(middleware.AdminMiddleware())
 		{
 			admin.GET("/tickets", handler.GetAllTickets)
 			admin.GET("/tickets/:id", handler.GetAdminTicketByID)
+			admin.GET("/tickets/:id/history", handler.GetAdminTicketHistory)
 			admin.PUT("/tickets/:id", handler.EditTicket)
 			admin.DELETE("/tickets/:id", handler.DeleteTicket)
 			admin.PATCH("/tickets/:id/assign", handler.AssignTicket)
 			admin.PATCH("/tickets/:id/status", handler.UpdateTicketStatus)
 			admin.GET("/dashboard", handler.GetDashboard)
 			admin.GET("/users", handler.GetAllUsers)
+			admin.PATCH("/users/:id/role", handler.UpdateUserRole)
 		}
 	}
 

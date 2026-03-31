@@ -27,7 +27,7 @@ type UpdateStatusRequest struct {
 }
 
 // ======================
-// HELPER: safe get user_id from context
+// HELPER: safe get user_id / role from context
 // ======================
 
 func getUserID(c *gin.Context) (uint, bool) {
@@ -49,7 +49,7 @@ func getRole(c *gin.Context) (string, bool) {
 }
 
 // ======================
-// CREATE TICKET
+// CREATE TICKET (user, dengan redirect ke detail)
 // ======================
 
 func CreateTicket(c *gin.Context) {
@@ -65,16 +65,20 @@ func CreateTicket(c *gin.Context) {
 		return
 	}
 
-	if err := service.CreateTicket(req.Title, req.Description, userID); err != nil {
+	ticketID, err := service.CreateTicket(req.Title, req.Description, userID)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "ticket created successfully"})
+	c.JSON(http.StatusCreated, gin.H{
+		"message":   "ticket created successfully",
+		"ticket_id": ticketID,
+	})
 }
 
 // ======================
-// GET USER TICKETS
+// GET USER TICKETS (paginated)
 // ======================
 
 func GetTickets(c *gin.Context) {
@@ -98,6 +102,69 @@ func GetTickets(c *gin.Context) {
 }
 
 // ======================
+// GET TICKET BY ID (USER - hanya tiket milik sendiri)
+// ======================
+
+func GetTicketByID(c *gin.Context) {
+	ticketID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticket id"})
+		return
+	}
+
+	userID, ok := getUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	ticket, err := service.GetUserTicketByID(uint(ticketID), userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, ticket)
+}
+
+// ======================
+// GET TICKET HISTORY (USER - hanya tiket milik sendiri)
+// ======================
+
+func GetTicketHistory(c *gin.Context) {
+	ticketID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticket id"})
+		return
+	}
+
+	userID, ok := getUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	role, _ := getRole(c)
+
+	// User biasa hanya bisa lihat history tiket miliknya sendiri
+	if role == "user" {
+		_, err := service.GetUserTicketByID(uint(ticketID), userID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "ticket not found"})
+			return
+		}
+	}
+
+	history, err := service.GetTicketHistory(uint(ticketID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get history"})
+		return
+	}
+
+	c.JSON(http.StatusOK, history)
+}
+
+// ======================
 // ASSIGN TICKET (ADMIN)
 // ======================
 
@@ -108,13 +175,19 @@ func AssignTicket(c *gin.Context) {
 		return
 	}
 
+	adminID, ok := getUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	var req AssignTicketRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := service.AssignTicket(uint(ticketID), req.AssigneeID); err != nil {
+	if err := service.AssignTicket(uint(ticketID), req.AssigneeID, adminID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -157,30 +230,4 @@ func UpdateTicketStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "status updated successfully"})
-}
-
-// ======================
-// GET TICKET BY ID (USER)
-// ======================
-
-func GetTicketByIDUser(c *gin.Context) {
-	ticketID, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticket id"})
-		return
-	}
-
-	userID, ok := getUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	ticket, err := service.GetUserTicketByID(uint(ticketID), userID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, ticket)
 }

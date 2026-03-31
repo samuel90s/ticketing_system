@@ -17,6 +17,7 @@ type CommentResponse struct {
 	TicketID   uint   `json:"ticket_id"`
 	UserID     uint   `json:"user_id"`
 	User       string `json:"user"`
+	Role       string `json:"role"`
 	Content    string `json:"content"`
 	IsInternal bool   `json:"is_internal"`
 	CreatedAt  string `json:"created_at"`
@@ -28,6 +29,7 @@ func mapComment(c model.Comment) CommentResponse {
 		TicketID:   c.TicketID,
 		UserID:     c.UserID,
 		User:       c.User.Name,
+		Role:       c.User.Role,
 		Content:    c.Content,
 		IsInternal: c.IsInternal,
 		CreatedAt:  c.CreatedAt.Format("2006-01-02 15:04:05"),
@@ -91,11 +93,28 @@ func AddComment(ticketID, userID uint, content string, isInternal bool, role str
 		IsInternal: isInternal,
 	}
 
-	return config.DB.Create(&comment).Error
+	if err := config.DB.Create(&comment).Error; err != nil {
+		return err
+	}
+
+	// Log history
+	action := "commented"
+	if isInternal {
+		action = "internal_comment"
+	}
+	logHistory(ticketID, userID, action, "", "")
+
+	// Jika agent/admin reply → ubah status ke "replied" jika masih "open"
+	if (role == "agent" || role == "admin") && !isInternal && ticket.Status == "open" {
+		config.DB.Model(&ticket).Update("status", "replied")
+		logHistory(ticketID, userID, "status_changed", "open", "replied")
+	}
+
+	return nil
 }
 
 // ======================
-// DELETE COMMENT (ADMIN)
+// DELETE COMMENT
 // ======================
 
 func DeleteComment(commentID, userID uint, role string) error {

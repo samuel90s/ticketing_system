@@ -8,8 +8,9 @@ import (
 type DashboardStats struct {
 	Total      int64 `json:"total"`
 	Open       int64 `json:"open"`
-	InProgress int64 `json:"in_progress"`
-	Closed     int64 `json:"closed"`
+	Replied    int64 `json:"replied"`
+	OnProgress int64 `json:"on_progress"`
+	Done       int64 `json:"done"`
 }
 
 func GetDashboardStats() (DashboardStats, error) {
@@ -18,16 +19,16 @@ func GetDashboardStats() (DashboardStats, error) {
 	if err := config.DB.Model(&model.Ticket{}).Count(&stats.Total).Error; err != nil {
 		return stats, err
 	}
-
 	if err := config.DB.Model(&model.Ticket{}).Where("status = ?", "open").Count(&stats.Open).Error; err != nil {
 		return stats, err
 	}
-
-	if err := config.DB.Model(&model.Ticket{}).Where("status = ?", "in_progress").Count(&stats.InProgress).Error; err != nil {
+	if err := config.DB.Model(&model.Ticket{}).Where("status = ?", "replied").Count(&stats.Replied).Error; err != nil {
 		return stats, err
 	}
-
-	if err := config.DB.Model(&model.Ticket{}).Where("status = ?", "closed").Count(&stats.Closed).Error; err != nil {
+	if err := config.DB.Model(&model.Ticket{}).Where("status = ?", "on_progress").Count(&stats.OnProgress).Error; err != nil {
+		return stats, err
+	}
+	if err := config.DB.Model(&model.Ticket{}).Where("status = ?", "done").Count(&stats.Done).Error; err != nil {
 		return stats, err
 	}
 

@@ -7,12 +7,13 @@ type Ticket struct {
 	Title       string `gorm:"not null"`
 	Description string `gorm:"not null"`
 
-	UserID uint `gorm:"not null"` // owner
+	UserID uint `gorm:"not null"`
 	User   User `gorm:"foreignKey:UserID"`
 
 	AssigneeID *uint
 	Assignee   *User `gorm:"foreignKey:AssigneeID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
 
+	// Status: open | replied | on_progress | done
 	Status string `gorm:"type:varchar(20);default:'open';index"`
 
 	CreatedAt time.Time

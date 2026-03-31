@@ -39,6 +39,21 @@ func GetAdminTicketByID(c *gin.Context) {
 	c.JSON(http.StatusOK, ticket)
 }
 
+// GET /api/admin/tickets/:id/history
+func GetAdminTicketHistory(c *gin.Context) {
+	ticketID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticket id"})
+		return
+	}
+	history, err := service.GetTicketHistory(uint(ticketID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get history"})
+		return
+	}
+	c.JSON(http.StatusOK, history)
+}
+
 type EditTicketRequest struct {
 	Title       string `json:"title"       binding:"required,min=3,max=200"`
 	Description string `json:"description" binding:"required,min=10"`
@@ -100,4 +115,36 @@ func GetAllUsers(c *gin.Context) {
 		})
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+// PATCH /api/admin/users/:id/role — admin bisa ubah role user
+type UpdateRoleRequest struct {
+	Role string `json:"role" binding:"required"`
+}
+
+func UpdateUserRole(c *gin.Context) {
+	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	var req UpdateRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	validRoles := map[string]bool{"user": true, "agent": true, "admin": true}
+	if !validRoles[req.Role] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role, allowed: user, agent, admin"})
+		return
+	}
+
+	if err := config.DB.Model(&model.User{}).Where("id = ?", userID).Update("role", req.Role).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update role"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "role updated successfully"})
 }

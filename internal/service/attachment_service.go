@@ -24,12 +24,12 @@ type AttachmentResponse struct {
 	TicketID    uint   `json:"ticket_id"`
 	UserID      uint   `json:"user_id"`
 	FileName    string `json:"file_name"`
+	FilePath    string `json:"file_path"` // path relatif untuk preview
 	FileSize    int64  `json:"file_size"`
 	ContentType string `json:"content_type"`
 	CreatedAt   string `json:"created_at"`
 }
 
-// file types yang diizinkan
 var allowedTypes = map[string]bool{
 	"image/jpeg":      true,
 	"image/png":       true,
@@ -47,43 +47,36 @@ const maxFileSize = 50 * 1024 * 1024 // 50MB
 // ======================
 
 func UploadAttachment(ticketID, userID uint, file *multipart.FileHeader) (*AttachmentResponse, error) {
-	// validasi ticket ada
 	var ticket model.Ticket
 	if err := config.DB.First(&ticket, ticketID).Error; err != nil {
 		return nil, errors.New("ticket not found")
 	}
 
-	// validasi ukuran file
 	if file.Size > maxFileSize {
 		return nil, errors.New("file too large, max 50MB")
 	}
 
-	// validasi content type
 	contentType := file.Header.Get("Content-Type")
 	if !allowedTypes[contentType] {
-		return nil, errors.New("file type not allowed, allowed: jpg, png, gif, webp, mp4, mov, pdf")
+		return nil, errors.New("file type not allowed")
 	}
 
-	// buat folder uploads kalau belum ada
 	uploadDir := "uploads"
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		return nil, errors.New("failed to create upload directory")
 	}
 
-	// generate nama file unik
 	ext := filepath.Ext(file.Filename)
 	safeExt := strings.ToLower(ext)
 	uniqueName := fmt.Sprintf("%s_%d%s", uuid.New().String(), time.Now().Unix(), safeExt)
 	filePath := filepath.Join(uploadDir, uniqueName)
 
-	// buka file
 	src, err := file.Open()
 	if err != nil {
 		return nil, errors.New("failed to open file")
 	}
 	defer src.Close()
 
-	// tulis ke disk
 	dst, err := os.Create(filePath)
 	if err != nil {
 		return nil, errors.New("failed to save file")
@@ -103,7 +96,6 @@ func UploadAttachment(ticketID, userID uint, file *multipart.FileHeader) (*Attac
 		}
 	}
 
-	// simpan ke DB
 	attachment := model.Attachment{
 		TicketID:    ticketID,
 		UserID:      userID,
@@ -123,6 +115,7 @@ func UploadAttachment(ticketID, userID uint, file *multipart.FileHeader) (*Attac
 		TicketID:    attachment.TicketID,
 		UserID:      attachment.UserID,
 		FileName:    attachment.FileName,
+		FilePath:    "/" + filePath, // untuk static serve
 		FileSize:    attachment.FileSize,
 		ContentType: attachment.ContentType,
 		CreatedAt:   attachment.CreatedAt.Format("2006-01-02 15:04:05"),
@@ -135,7 +128,6 @@ func UploadAttachment(ticketID, userID uint, file *multipart.FileHeader) (*Attac
 
 func GetAttachments(ticketID uint) ([]AttachmentResponse, error) {
 	var attachments []model.Attachment
-
 	err := config.DB.Where("ticket_id = ?", ticketID).
 		Order("created_at DESC").
 		Find(&attachments).Error
@@ -150,6 +142,7 @@ func GetAttachments(ticketID uint) ([]AttachmentResponse, error) {
 			TicketID:    a.TicketID,
 			UserID:      a.UserID,
 			FileName:    a.FileName,
+			FilePath:    "/" + a.FilePath,
 			FileSize:    a.FileSize,
 			ContentType: a.ContentType,
 			CreatedAt:   a.CreatedAt.Format("2006-01-02 15:04:05"),
@@ -159,7 +152,7 @@ func GetAttachments(ticketID uint) ([]AttachmentResponse, error) {
 }
 
 // ======================
-// GET ATTACHMENT FILE PATH
+// GET ATTACHMENT PATH
 // ======================
 
 func GetAttachmentPath(attachmentID uint) (string, string, error) {
@@ -184,8 +177,6 @@ func DeleteAttachment(attachmentID, userID uint, role string) error {
 		return errors.New("not authorized to delete this attachment")
 	}
 
-	// hapus file dari disk
 	os.Remove(attachment.FilePath)
-
 	return config.DB.Delete(&attachment).Error
 }
