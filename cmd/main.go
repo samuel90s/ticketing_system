@@ -37,7 +37,7 @@ func main() {
 		AllowOrigins:     []string{"http://localhost:3000"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
+		ExposeHeaders:    []string{"Content-Length", "Content-Disposition"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
@@ -47,6 +47,9 @@ func main() {
 	r.GET("/", func(c *gin.Context) { c.JSON(200, gin.H{"message": "API is running"}) })
 	r.POST("/register", handler.Register)
 	r.POST("/login", handler.Login)
+
+	// Download tidak butuh auth supaya next/image bisa load langsung
+	r.GET("/api/attachments/:id/download", handler.DownloadAttachment)
 
 	auth := r.Group("/api")
 	auth.Use(middleware.AuthMiddleware())
@@ -59,15 +62,14 @@ func main() {
 		auth.GET("/tickets/:id", handler.GetTicketByID)
 		auth.GET("/tickets/:id/history", handler.GetTicketHistory)
 
-		// Comments (semua role, filtering by role ada di service)
+		// Comments
 		auth.GET("/tickets/:id/comments", handler.GetComments)
 		auth.POST("/tickets/:id/comments", handler.AddComment)
 		auth.DELETE("/tickets/:id/comments/:comment_id", handler.DeleteComment)
 
-		// Attachments (semua role)
+		// Attachments
 		auth.POST("/tickets/:id/attachments", handler.UploadAttachment)
 		auth.GET("/tickets/:id/attachments", handler.GetAttachments)
-		auth.GET("/attachments/:id/download", handler.DownloadAttachment)
 		auth.DELETE("/attachments/:id", handler.DeleteAttachment)
 
 		// AGENT ROUTES (agent + admin)

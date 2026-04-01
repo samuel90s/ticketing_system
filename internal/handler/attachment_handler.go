@@ -56,6 +56,7 @@ func GetAttachments(c *gin.Context) {
 }
 
 // GET /api/attachments/:id/download
+// Route ini didaftarkan TANPA auth middleware supaya next/image & browser bisa load langsung
 func DownloadAttachment(c *gin.Context) {
 	attachmentID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -69,6 +70,7 @@ func DownloadAttachment(c *gin.Context) {
 		return
 	}
 
+	c.Header("Cache-Control", "public, max-age=86400")
 	c.FileAttachment(filePath, fileName)
 }
 
